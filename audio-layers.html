@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Layering Project</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Optional: Customize Tailwind theme
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        /* Simple style for the body */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the file input button */
+        input[type="file"]::file-selector-button {
+            @apply bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 cursor-pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 flex items-center justify-center min-h-screen">
+
+    <!-- Main content card -->
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-lg w-full text-center">
+        
+        <!-- HTML Content -->
+        <h1 class="text-3xl font-bold text-blue-600 mb-6">
+            Audio Layering Tool
+        </h1>
+        
+        <p class="text-gray-700 mb-6">
+            Use the button below to add new sound layers.
+        </p>
+        
+        <!-- Audio Player Elements -->
+        <div class="space-y-4">
+            <input type="file" id="fileInput" accept="audio/*" class="w-full text-sm text-gray-500 file:mr-4 file:border-0" multiple>
+            <p class="text-xs text-gray-400 -mt-2">You can select multiple files at once.</p>
+
+            <button id="loopAllBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:bg-gray-300" disabled>
+                ♾️ Loop ALL OFF
+            </button>
+
+            <div class="flex space-x-4">
+                <button id="playAllBtn" class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:bg-gray-300" disabled>
+                    ▶️ Play All
+                </button>
+                <button id="stopAllBtn" class="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:bg-gray-300" disabled>
+                    ⏹️ Stop All
+                </button>
+            </div>
+
+            <!-- Sound List -->
+            <div id="soundList" class="pt-4 text-left space-y-2">
+                <p class="text-gray-500 text-center italic">No sounds loaded yet.</p>
+            </div>
+        </div>
+
+        <!-- Audio elements will be created dynamically and stored in JS -->
+
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Get elements
+        const fileInput = document.getElementById('fileInput');
+        const playAllBtn = document.getElementById('playAllBtn');
+        const stopAllBtn = document.getElementById('stopAllBtn');
+        const loopAllBtn = document.getElementById('loopAllBtn');
+        const soundList = document.getElementById('soundList');
+
+        // App state
+        let sounds = []; // This will hold our sound objects
+        let isLooping = false;
+
+        // Add event listener for file selection
+        fileInput.addEventListener('change', (event) => {
+            if (sounds.length === 0) {
+                soundList.innerHTML = ''; // Clear "No sounds loaded" message
+            }
+
+            // Loop through all selected files
+            for (const file of event.target.files) {
+                // Create a new sound object for each file
+                createSoundObject(file);
+            }
+            
+            // Enable controls
+            playAllBtn.disabled = false;
+            stopAllBtn.disabled = true;
+            loopAllBtn.disabled = false;
+            
+            // Reset the file input to allow adding the same file again if desired
+            fileInput.value = null;
+        });
+
+        function createSoundObject(file) {
+            const audio = new Audio();
+            audio.src = URL.createObjectURL(file);
+            audio.loop = isLooping;
+
+            // --- Create the UI element for the sound list ---
+            const soundItem = document.createElement('div');
+            soundItem.className = 'p-2 border rounded-lg flex items-center space-x-3';
+            
+            // Individual Play/Pause Button
+            const playPauseBtn = document.createElement('button');
+            playPauseBtn.textContent = '▶️';
+            playPauseBtn.className = 'flex-shrink-0 w-10 h-10 rounded-full bg-green-500 hover:bg-green-700 text-white font-bold transition-all text-sm';
+
+            // Sound Name
+            const soundName = document.createElement('span');
+            soundName.textContent = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
+            soundName.title = file.name;
+            soundName.className = 'text-sm font-medium flex-grow text-left';
+            
+            // Loop Display
+            const loopDisplay = document.createElement('span');
+            loopDisplay.textContent = 'Loops: 0';
+            loopDisplay.className = 'text-sm text-gray-600 flex-shrink-0 w-20 text-right';
+
+            soundItem.appendChild(playPauseBtn);
+            soundItem.appendChild(soundName);
+            soundItem.appendChild(loopDisplay);
+            soundList.appendChild(soundItem);
+
+            // Create the sound object and add to our array
+            const sound = {
+                element: audio,
+                loopCount: 0,
+                previousTime: 0,
+                loopDisplay: loopDisplay,
+                playPauseBtn: playPauseBtn
+            };
+
+            // --- Add Event Listeners ---
+
+            // Individual Play/Pause Button Logic
+            playPauseBtn.addEventListener('click', () => {
+                if (audio.paused) {
+                    audio.play();
+                    playPauseBtn.textContent = '⏸️';
+                    playPauseBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
+                    playPauseBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-700');
+                } else {
+                    audio.pause();
+                    playPauseBtn.textContent = '▶️';
+                    playPauseBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-700');
+                    playPauseBtn.classList.add('bg-green-500', 'hover:bg-green-700');
+                }
+                updateGlobalControls();
+            });
+
+            // Add the timeupdate listener for loop counting
+            audio.addEventListener('timeupdate', () => {
+                if (audio.loop && !audio.paused) {
+                    if (audio.currentTime < sound.previousTime && sound.previousTime > 0.1) {
+                        sound.loopCount++;
+                        sound.loopDisplay.textContent = `Loops: ${sound.loopCount}`;
+                    }
+                    sound.previousTime = audio.currentTime;
+                } else {
+                    sound.previousTime = 0;
+                }
+            });
+
+            // Add 'ended' listener for non-looping playback
+            audio.addEventListener('ended', () => {
+                sound.previousTime = 0;
+                // Reset individual button
+                playPauseBtn.textContent = '▶️';
+                playPauseBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-700');
+                playPauseBtn.classList.add('bg-green-500', 'hover:bg-green-700');
+                
+                updateGlobalControls();
+            });
+
+            sounds.push(sound);
+        }
+
+        // --- Global Control Functions ---
+
+        // NEW function to check all sounds and update global buttons
+        function updateGlobalControls() {
+            // Check if any sound is currently playing
+            const isAnySoundPlaying = sounds.some(s => !s.element.paused);
+
+            if (isAnySoundPlaying) {
+                playAllBtn.disabled = true;
+                stopAllBtn.disabled = false;
+            } else {
+                // All sounds are paused
+                playAllBtn.disabled = false;
+                stopAllBtn.disabled = true;
+            }
+        }
+
+        // Add event listener for Play All button
+        playAllBtn.addEventListener('click', () => {
+            sounds.forEach(sound => {
+                sound.element.play();
+                // Update individual button
+                sound.playPauseBtn.textContent = '⏸️';
+                sound.playPauseBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
+                sound.playPauseBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-700');
+            });
+            updateGlobalControls(); // Update global buttons
+        });
+
+        // Add event listener for Stop All button
+        stopAllBtn.addEventListener('click', () => {
+            sounds.forEach(sound => {
+                sound.element.pause();
+                sound.element.currentTime = 0;
+                // Reset counter
+                sound.loopCount = 0;
+                sound.previousTime = 0;
+                sound.loopDisplay.textContent = 'Loops: 0';
+                // Reset individual button
+                sound.playPauseBtn.textContent = '▶️';
+                sound.playPauseBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-700');
+                sound.playPauseBtn.classList.add('bg-green-500', 'hover:bg-green-700');
+            });
+            updateGlobalControls(); // Update global buttons
+        });
+
+        // Add event listener for Loop All button
+        loopAllBtn.addEventListener('click', () => {
+            isLooping = !isLooping;
+            
+            sounds.forEach(sound => {
+                sound.element.loop = isLooping;
+            });
+
+            if (isLooping) {
+                loopAllBtn.textContent = '♾️ Loop ALL ON';
+                loopAllBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                loopAllBtn.classList.add('bg-blue-500', 'hover:bg-blue-700');
+            } else {
+                loopAllBtn.textContent = '♾️ Loop ALL OFF';
+                loopAllBtn.classList.remove('bg-blue-500', 'hover:bg-blue-700');
+                loopAllBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+            }
+        });
+
+    </script>
+
+</body>
+</html>
